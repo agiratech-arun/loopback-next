@@ -4,12 +4,11 @@
 // License text available at https://opensource.org/licenses/MIT
 
 import {expect} from '@loopback/testlab';
-import {Application, Sequence} from '../../..';
+import {Application, Sequence, Component} from '../../..';
 
 describe('Bootstrapping the application', () => {
-  let app: Application;
-
   context('with a user-defined sequence', () => {
+    let app: Application;
     before(givenAppWithUserDefinedSequence);
 
     it('binds the `sequence` key to the user-defined sequence', async () => {
@@ -26,20 +25,48 @@ describe('Bootstrapping the application', () => {
   });
 
   context('with user-defined components', () => {
-    before(givenAppWithUserDefinedComponents);
-
     it('binds all user-defined components to the application context', () => {
-      expect(app.find('component.*')).to.be.instanceOf(Array).with.lengthOf(4);
+      class AuditComponent {}
+
+      const app = new Application({components: [AuditComponent]});
+      const componentKeys = app.find('component.*').map(b => b.key);
+      expect(componentKeys).to.containEql('components.AuditComponent');
+
+      const componentInstance = app.getSync('components.AuditComponent');
+      expect(componentInstance).to.be.instanceOf(AuditComponent);
     });
 
-    function givenAppWithUserDefinedComponents() {
-      class Todo {}
-      class Authentication {}
-      class Authorization {}
-      class Rejection {}
-      app = new Application({
-        components: [Todo, Authentication, Authorization, Rejection],
-      });
-    }
+    it('registers all providers from components', () => {
+      class FooProvider {
+        value() { return 'bar'; }
+      }
+
+      class FooComponent {
+        providers = {foo: FooProvider};
+      }
+
+      const app = new Application({components: [FooComponent]});
+
+      const value = app.getSync('foo');
+      expect(value).to.equal('bar');
+    });
+
+    it('registers all controllers from components', () => {
+      // TODO(bajtos) Beef up this test. Create a real controller with
+      // a public API endpoint and verify that this endpoint can be invoked
+      // via HTTP/REST API.
+
+      class MyController {
+      }
+
+      class MyComponent {
+        controllers = [MyController];
+      }
+
+      const app = new Application({components: [MyComponent]});
+
+      expect(app.find('controllers.*').map(b => b.key))
+        .to.eql(['controllers.MyController']);
+    });
   });
 });
