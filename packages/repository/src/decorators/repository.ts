@@ -7,7 +7,8 @@ import {Class} from '../common-types';
 import {Model} from '../model';
 import {Repository} from '../repository';
 import {DataSource} from '../datasource';
-import {inject} from '@loopback/context';
+import {juggler, DefaultCrudRepository} from '../legacy-juggler-bridge';
+import {inject, Context, Injection} from '@loopback/context';
 
 /**
  * Metadata for a repository
@@ -24,7 +25,7 @@ export class RepositoryMetadata {
   /**
    * Class of the model
    */
-  modelClass?: Class<Model>;
+  modelClass?: typeof juggler.PersistedModel | typeof Model;
   /**
    * Name of the data source
    */
@@ -32,7 +33,7 @@ export class RepositoryMetadata {
   /**
    * Instance of the data source
    */
-  dataSource?: DataSource;
+  dataSource?: juggler.DataSource | DataSource;
 
   /**
    * Constructor for RepositoryMetadata
@@ -51,8 +52,8 @@ export class RepositoryMetadata {
    * - new RepositoryMetadata(modelClass, dataSourceName);
    */
   constructor(
-    modelOrRepo: string | Class<Model>,
-    dataSource?: string | DataSource,
+    modelOrRepo: string | typeof juggler.PersistedModel | typeof Model,
+    dataSource?: string | juggler.DataSource | DataSource,
   ) {
     this.name = typeof modelOrRepo === 'string' && dataSource === undefined
       ? modelOrRepo
@@ -85,8 +86,8 @@ export class RepositoryMetadata {
  * - @repository(Customer, 'mysqlDataSource')
  */
 export function repository<T extends Model>(
-  model: string | Class<T>,
-  dataSource?: string | DataSource,
+  model: string | typeof juggler.PersistedModel,
+  dataSource?: string | juggler.DataSource,
 ) {
   const meta = new RepositoryMetadata(model, dataSource);
   return function(
@@ -100,15 +101,31 @@ export function repository<T extends Model>(
         // Please note key is undefined for constructor. If strictNullChecks
         // is true, the compiler will complain as reflect-metadata won't
         // accept undefined or null for key. Use ! to fool the compiler.
-        inject('repositories:' + meta.name, meta)(target, key!, descriptor);
+        inject('repositories.' + meta.name, meta)(target, key!, descriptor);
       } else {
         // Use repository-factory to create a repository from model + dataSource
         // inject('repository-factory', meta)(target, key!, descriptor);
-        throw new Error('@repository(model, dataSource) is not implemented');
+        inject('', meta, resolve)(target, key!, descriptor);
+        // throw new Error('@repository(model, dataSource) is not implemented');
       }
       return;
     }
     // Mixin repostory into the class
     throw new Error('Class level @repository is not implemented');
   };
+}
+
+async function resolve(ctx: Context, injection: Injection) {
+  const meta = injection.metadata as RepositoryMetadata;
+  let modelClass = meta.modelClass;
+  if (meta.modelName) {
+    modelClass = await ctx.get('models.' + meta.modelName);
+  }
+  let dataSource = meta.dataSource;
+  if (meta.dataSourceName) {
+    dataSource = await ctx.get('datasources.' + meta.dataSourceName);
+  }
+  return new DefaultCrudRepository(
+    modelClass as typeof juggler.PersistedModel,
+    dataSource! as juggler.DataSource);
 }

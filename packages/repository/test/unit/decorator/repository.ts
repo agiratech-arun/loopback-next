@@ -27,6 +27,8 @@ class MyController {
 describe('repository decorator', () => {
   let ctx: Context;
   let repo: Repository<juggler.PersistedModel>;
+  /* tslint:disable-next-line:variable-name */
+  let Note: typeof juggler.PersistedModel;
 
   before(function() {
     const ds: juggler.DataSource = new DataSourceConstructor({
@@ -34,22 +36,23 @@ describe('repository decorator', () => {
       connector: 'memory',
     });
 
-    /* tslint:disable-next-line:variable-name */
-    const Note = ds.createModel<typeof juggler.PersistedModel>(
+    Note = ds.createModel<typeof juggler.PersistedModel>(
       'note',
       {title: 'string', content: 'string'},
       {},
     );
     repo = new DefaultCrudRepository(Note, ds);
     ctx = new Context();
-    ctx.bind('repositories:noteRepo').to(repo);
-    ctx.bind('controllers:MyController').toClass(MyController);
+    ctx.bind('models.Note').to(Note);
+    ctx.bind('datasources.memory').to(ds);
+    ctx.bind('repositories.noteRepo').to(repo);
+    ctx.bind('controllers.MyController').toClass(MyController);
   });
 
   // tslint:disable-next-line:max-line-length
   it('supports referencing predefined repository by name via constructor', async () => {
     const myController: MyController = await ctx.get(
-      'controllers:MyController',
+      'controllers.MyController',
     );
     expect(myController.noteRepo).exactly(repo);
   });
@@ -57,7 +60,7 @@ describe('repository decorator', () => {
   // tslint:disable-next-line:max-line-length
   it('supports referencing predefined repository by name via property', async () => {
     const myController: MyController = await ctx.get(
-      'controllers:MyController',
+      'controllers.MyController',
     );
     expect(myController.noteRepo2).exactly(repo);
   });
@@ -69,14 +72,15 @@ describe('repository decorator', () => {
     }).to.throw(/not implemented/);
   });
 
-  it('throws not implemented for @repository(model, dataSource)', () => {
-    expect(() => {
-      class Controller2 {
-        constructor(
-          @repository('customer', 'mysql')
-          public noteRepo: Repository<juggler.PersistedModel>,
-        ) {}
-      }
-    }).to.throw(/not implemented/);
+  it('supports @repository(model, dataSource)', async () => {
+    class Controller2 {
+      constructor(@repository('Note', 'memory')
+        public noteRepo: Repository<juggler.PersistedModel>) {}
+    }
+    ctx.bind('controllers.Controller2').toClass(Controller2);
+    const myController: MyController = await ctx.get(
+      'controllers.Controller2',
+    );
+    expect(myController.noteRepo).to.be.not.null();
   });
 });
