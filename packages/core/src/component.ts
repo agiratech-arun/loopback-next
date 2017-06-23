@@ -17,12 +17,8 @@ export interface Component {
 
 export function mountComponent(
   app: Application,
-  componentClass: Constructor<Component>,
+  component: Component,
 ) {
-  const componentKey = 'components.' + componentClass.name;
-  app.bind(componentKey).toClass(componentClass);
-  const component = app.getSync(componentKey);
-
   if (component.controllers) {
     for (const controllerCtor of component.controllers) {
       app.controller(controllerCtor);

@@ -4,7 +4,8 @@
 // License text available at https://opensource.org/licenses/MIT
 
 import {expect} from '@loopback/testlab';
-import {Application, Sequence, Component} from '../../..';
+import {Constructor, Provider, inject} from '@loopback/context';
+import {Application, Sequence} from '../../..';
 
 describe('Bootstrapping the application', () => {
   context('with a user-defined sequence', () => {
@@ -67,6 +68,46 @@ describe('Bootstrapping the application', () => {
 
       expect(app.find('controllers.*').map(b => b.key))
         .to.eql(['controllers.MyController']);
+    });
+
+    it('injects component dependencies', () => {
+      class ConfigComponent {
+        providers = {
+          greetBriefly: class HelloProvider {
+            value() { return true; }
+          },
+        };
+      }
+
+      class BriefGreetingProvider {
+        value() { return 'Hi!'; }
+      }
+
+      class LongGreetingProvider {
+        value() { return 'Hello!'; }
+      }
+
+      class GreetingComponent {
+        providers: {
+          greeting: Constructor<Provider<string>>;
+        };
+
+        constructor(
+          @inject('greetBriefly') greetBriefly: boolean,
+        ) {
+          this.providers = {
+            greeting: greetBriefly ?
+              BriefGreetingProvider :
+              LongGreetingProvider,
+          };
+        }
+      }
+
+      const app = new Application({
+        components: [ConfigComponent, GreetingComponent],
+      });
+
+      expect(app.getSync('greeting')).to.equal('Hi!');
     });
   });
 });

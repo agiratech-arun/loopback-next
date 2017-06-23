@@ -142,7 +142,10 @@ export class Application extends Context {
    * ```
    */
   public component(component: Constructor<Component>) {
-    mountComponent(this, component);
+    const componentKey = `components.${component.name}`;
+    this.bind(componentKey).toClass(component);
+    const instance = this.getSync(componentKey);
+    mountComponent(this, instance);
   }
 }
 
